@@ -80,7 +80,8 @@ func (q *ChannelMessageQueue) addListMessageToQueue(nodeID string, msg *beehiveM
 }
 
 func (q *ChannelMessageQueue) addMessageToQueue(nodeID string, msg *beehiveModel.Message) {
-	if msg.GetResourceVersion() == "" && !isDeleteMessage(msg) {
+	if msg.GetResourceVersion() == "" && !isCsiDriverMessage(msg) && !isDeleteMessage(msg) {
+		klog.Errorf("bad message with empty resourceVersion: %s", msg.Header.ID)
 		return
 	}
 
@@ -95,7 +96,7 @@ func (q *ChannelMessageQueue) addMessageToQueue(nodeID string, msg *beehiveModel
 
 	item, exist, _ := nodeStore.GetByKey(messageKey)
 
-	if !isDeleteMessage(msg) {
+	if !isDeleteMessage(msg) && !isCsiDriverMessage(msg) {
 		// If the message doesn't exist in the store, then compare it with
 		// the version stored in the database
 		if !exist {
@@ -181,6 +182,18 @@ func isDeleteMessage(msg *beehiveModel.Message) bool {
 		klog.Errorf("fail to get message DeletionTimestamp for message: %s", msg.Header.ID)
 		return false
 	} else if deletionTimestamp != nil {
+		return true
+	}
+
+	return false
+}
+
+func isCsiDriverMessage(msg *beehiveModel.Message) bool {
+	op := msg.GetOperation()
+	if op == commonconst.CSIOperationTypeCreateVolume ||
+		op == commonconst.CSIOperationTypeDeleteVolume ||
+		op == commonconst.CSIOperationTypeControllerPublishVolume ||
+		op == commonconst.CSIOperationTypeControllerUnpublishVolume {
 		return true
 	}
 
